@@ -38,14 +38,26 @@ const GymAdminGymPanel = () => {
         const { data: auth } = await supabase.auth.getUser()
         const userId = auth.user?.id
         if (!userId) throw new Error('No hay sesión activa')
-        const { data: profile, error: profileError } = await supabase.from('profiles').select('gym_id, gym').eq('id', userId).single()
-        if (profileError) throw profileError
-        const currentGymId = (profile as { gym_id?: string; gym?: string })?.gym_id ?? (profile as { gym?: string })?.gym
-        if (!currentGymId) throw new Error('El perfil no tiene gimnasio asignado')
+        
+        // Obtener gym_id de la tabla administrators
+        const { data: admin, error: adminError } = await supabase
+          .from('administrators')
+          .select('gym_id')
+          .eq('user_id', userId)
+          .single()
+        
+        if (adminError) throw adminError
+        if (!admin?.gym_id) throw new Error('El administrador no tiene gimnasio asignado')
+        
+        const currentGymId = admin.gym_id
         if (!active) return
         setGymId(currentGymId)
 
-        const { data, error: gymError } = await supabase.from('gyms').select('*').eq('id', currentGymId).single()
+        const { data, error: gymError } = await supabase
+          .from('gyms')
+          .select('*')
+          .eq('id', currentGymId)
+          .single()
         if (!active) return
         if (gymError) throw gymError
         setGym(data as GymRow)

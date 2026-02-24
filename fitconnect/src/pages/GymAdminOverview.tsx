@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, CreditCard, Loader2, Users } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
@@ -29,6 +29,18 @@ const rollupByMonth = (rows: { created_at: string | null }[]): MonthlySeries => 
   return { labels: months.map((m) => m.label), data: months.map((m) => counter[m.key] ?? 0) }
 }
 
+const rollupByMonthSum = (rows: { created_at: string | null; total_amount: number }[]): MonthlySeries => {
+  const months = getLastMonths(6)
+  const counter = months.reduce<Record<string, number>>((acc, m) => ({ ...acc, [m.key]: 0 }), {})
+  rows.forEach((row) => {
+    if (!row.created_at) return
+    const d = new Date(row.created_at)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    if (counter[key] !== undefined) counter[key] += row.total_amount
+  })
+  return { labels: months.map((m) => m.label), data: months.map((m) => counter[m.key] ?? 0) }
+}
+
 const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
   if (!data.length) return <p className="text-sm text-text-secondary">Sin datos</p>
   const max = Math.max(...data, 1)
@@ -51,10 +63,10 @@ const GymAdminOverview = () => {
   const [salesAmount, setSalesAmount] = useState(0)
   const [userSeries, setUserSeries] = useState<MonthlySeries>({ labels: [], data: [] })
   const [subSeries, setSubSeries] = useState<MonthlySeries>({ labels: [], data: [] })
+  const [salesSeries, setSalesSeries] = useState<MonthlySeries>({ labels: [], data: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const lastMonths = useMemo(() => getLastMonths(6), [])
 
   useEffect(() => {
     let active = true
@@ -67,10 +79,17 @@ const GymAdminOverview = () => {
         const userId = auth.user?.id
         if (!userId) throw new Error('No hay sesión activa')
 
-        const { data: profile, error: profileError } = await supabase.from('profiles').select('gym, gym_id').eq('id', userId).single()
-        if (profileError) throw profileError
-        const currentGymId = (profile as { gym?: string; gym_id?: string })?.gym_id ?? (profile as { gym?: string })?.gym
-        if (!currentGymId) throw new Error('El perfil no tiene gimnasio asignado')
+        // Obtener gym_id de la tabla administrators
+        const { data: admin, error: adminError } = await supabase
+          .from('administrators')
+          .select('gym_id')
+          .eq('user_id', userId)
+          .single()
+        
+        if (adminError) throw adminError
+        if (!admin?.gym_id) throw new Error('El administrador no tiene gimnasio asignado')
+        
+        const currentGymId = admin.gym_id
         if (!active) return
         setGymId(currentGymId)
 
@@ -78,24 +97,79 @@ const GymAdminOverview = () => {
         since.setMonth(since.getMonth() - 5, 1)
         since.setHours(0, 0, 0, 0)
 
-        const [membersRes, subsRes, salesRes, usersSeriesRes, subsSeriesRes] = await Promise.all([
-          supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('gym_id', currentGymId).eq('role', 'user'),
-          supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('gym_id', currentGymId).eq('status', 'Activa'),
-          supabase.from('payments').select('amount').eq('gym_id', currentGymId).gte('created_at', since.toISOString()),
-          supabase.from('profiles').select('created_at').eq('gym_id', currentGymId).eq('role', 'user').gte('created_at', since.toISOString()),
-          supabase.from('subscriptions').select('created_at').eq('gym_id', currentGymId).gte('created_at', since.toISOString()),
-        ])
+        // Buscar suscripciones activas del gimnasio (miembros)
+        const { data: subsData, error: subsError } = await supabase
+          .from('user_subscriptions')
+          .select('id, created_at, subscription_plans(gym_id)')
+          .eq('status', 'active')
+
+        console.log('Subs data:', subsData)
+        console.log('Subs error:', subsError)
+
+        if (subsError) throw subsError
+
+        // Filtrar solo las suscripciones del gimnasio actual
+        const gymSubs = (subsData ?? []).filter((sub) => {
+          const planData = sub.subscription_plans as Record<string, unknown> | null
+          console.log('Checking sub:', sub.id, 'plan gym_id:', planData?.gym_id, 'current gym:', currentGymId)
+          return planData?.gym_id === currentGymId
+        })
+
+        // Buscar planes activos del gimnasio (sin filtro de fecha)
+        const { data: plansData, error: plansError } = await supabase
+          .from('subscription_plans')
+          .select('id')
+          .eq('gym_id', currentGymId)
+          .eq('is_active', true)
+
+        console.log('Plans query params:', { gym_id: currentGymId, is_active: true })
+        console.log('Plans data:', plansData)
+        console.log('Plans error:', plansError)
+
+        if (plansError) throw plansError
+
+        // Buscar órdenes del gimnasio (ventas tienda) de los últimos 6 meses
+        const sixMonthsAgo = new Date()
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+        sixMonthsAgo.setHours(0, 0, 0, 0)
+
+        // Primero traer TODAS las órdenes para ver qué valores tienen
+        const { data: allOrders, error: allOrdersError } = await supabase
+          .from('orders')
+          .select('id, total_amount, created_at, gym_id, status')
+
+        console.log('ALL Orders:', allOrders)
+        console.log('Current gym_id:', currentGymId)
+        console.log('Date filter (6 months ago):', sixMonthsAgo.toISOString())
+
+        if (allOrdersError) throw allOrdersError
+
+        // Filtrar manualmente las órdenes del gimnasio actual con status paid
+        const filteredOrders = (allOrders ?? []).filter(order => {
+          const isGymMatch = order.gym_id === currentGymId
+          const isStatusMatch = order.status === 'paid'
+          const isDateMatch = new Date(order.created_at) >= sixMonthsAgo
+          console.log(`Order ${order.id}:`, { gym_id: order.gym_id, status: order.status, created_at: order.created_at, isGymMatch, isStatusMatch, isDateMatch })
+          return isGymMatch && isStatusMatch && isDateMatch
+        })
+
+        console.log('Filtered Orders:', filteredOrders)
+
+        const activeMembersRes = gymSubs.filter((sub) => sub.created_at !== null)
+        const activePlansRes = (plansData ?? []).map((plan) => ({ created_at: null }))
+        const totalSales = (filteredOrders ?? []).reduce((sum, order) => sum + (order.total_amount ?? 0), 0)
+        const salesRes = rollupByMonthSum(filteredOrders ?? [])
 
         if (!active) return
-        setMemberCount(membersRes.count ?? 0)
-        setActiveSubs(subsRes.count ?? 0)
-        const salesTotal = (salesRes.data ?? []).reduce((acc, row) => acc + (typeof row.amount === 'number' ? row.amount : Number(row.amount ?? 0)), 0)
-        setSalesAmount(salesTotal)
-        setUserSeries(rollupByMonth(usersSeriesRes.data ?? []))
-        setSubSeries(rollupByMonth(subsSeriesRes.data ?? []))
+        
+        setMemberCount(gymSubs.length)
+        setActiveSubs(plansData?.length ?? 0)
+        setSalesAmount(totalSales)
+        setUserSeries(rollupByMonth(activeMembersRes))
+        setSubSeries(rollupByMonth(activePlansRes))
+        setSalesSeries(salesRes)
 
-        const firstError = [membersRes.error, subsRes.error, salesRes.error, usersSeriesRes.error, subsSeriesRes.error].find(Boolean)
-        if (firstError) setError(firstError.message)
+        if (!active) return
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudieron cargar los datos')
       } finally {
@@ -139,13 +213,14 @@ const GymAdminOverview = () => {
             {!loading && salesAmount === 0 && <span className="text-sm text-text-secondary">Sin datos</span>}
           </div>
         </Card>
-        <Card title="Series" subtitle="Usuarios / Subs" action={<Activity size={16} className="text-text-secondary" />}>
+        <Card title="Series" subtitle="Usuarios / Subs / Ventas" action={<Activity size={16} className="text-text-secondary" />}>
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-text-secondary"><Loader2 className="animate-spin" size={16} /> Cargando</div>
           ) : (
             <div className="space-y-2">
               <Sparkline data={userSeries.data} color="rgb(99,102,241)" />
               <Sparkline data={subSeries.data} color="rgb(16,185,129)" />
+              <Sparkline data={salesSeries.data} color="rgb(239,68,68)" />
             </div>
           )}
         </Card>

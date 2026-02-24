@@ -1,12 +1,14 @@
 import { LogOut, Moon, Sun } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../store/theme'
+import { supabase } from '../lib/supabase'
 
 const GymAdminTopbar = () => {
   const { theme, toggleTheme } = useThemeStore()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     navigate('/')
   }
 

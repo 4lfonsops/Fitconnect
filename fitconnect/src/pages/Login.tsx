@@ -28,40 +28,39 @@ const Login = () => {
       return
     }
 
-    // Obtiene el rol desde profiles para enrutar al panel correcto
+    // Obtiene el rol desde administrators para enrutar al panel correcto
     const { data: userData } = await supabase.auth.getUser()
     const userId = userData.user?.id
 
     if (!userId) {
-      navigate('/superadmin')
+      setLoginError('No se pudo obtener información del usuario')
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+    const { data: admin, error: adminError } = await supabase
+      .from('administrators')
       .select('role')
-      .eq('id', userId)
+      .eq('user_id', userId)
       .single()
 
-    if (profileError) {
-      // Sin perfil o error: manda a superadmin como fallback
+    if (adminError || !admin) {
+      setLoginError('Usuario no registrado como administrador')
+      return
+    }
+
+    const role = admin.role
+    if (role === 'superadmin') {
       navigate('/superadmin')
       return
     }
 
-    const role = profile?.role
-    if (role === 'gym_owner') {
+    if (role === 'gym_admin') {
       navigate('/admin')
       return
     }
 
-    if (role === 'admin') {
-      navigate('/superadmin')
-      return
-    }
-
-    // Resto de roles -> login básico
-    navigate('/superadmin')
+    // Rol desconocido: fallback a login
+    navigate('/')
   }
 
   return (
