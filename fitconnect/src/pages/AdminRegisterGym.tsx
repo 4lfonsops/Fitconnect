@@ -1,5 +1,6 @@
-import { FormEvent, useState } from 'react'
-import { Building2, Loader2 } from 'lucide-react'
+import type { FormEvent } from 'react'
+import { useState, useRef } from 'react'
+import { Building2, Loader2, Upload } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
 
@@ -8,13 +9,15 @@ const AdminRegisterGym = () => {
     name: '',
     address: '',
     phone: '',
-    location: '',
-    image_url: '',
+    description: '',
     is_active: true,
   })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
   const [creating, setCreating] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [feedbackType, setFeedbackType] = useState<'success' | 'error' | ''>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.currentTarget
@@ -22,6 +25,38 @@ const AdminRegisterGym = () => {
       ...formData,
       [name]: type === 'checkbox' ? (e.currentTarget as HTMLInputElement).checked : value,
     })
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0]
+    if (file) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const uploadImageToStorage = async (file: File): Promise<string> => {
+    const fileExtension = file.name.split('.').pop()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExtension}`
+    
+    const { error: uploadError } = await supabase.storage
+      .from('gym-images')
+      .upload(fileName, file)
+
+    if (uploadError) {
+      throw new Error(`Error al subir imagen: ${uploadError.message}`)
+    }
+
+    // Obtener URL pública
+    const { data } = supabase.storage
+      .from('gym-images')
+      .getPublicUrl(fileName)
+
+    return data.publicUrl
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -37,13 +72,24 @@ const AdminRegisterGym = () => {
       return
     }
 
+    if (!imageFile) {
+      setFeedback('Por favor sube una imagen para el gimnasio')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
     try {
+      // Subir imagen a storage
+      const imageUrl = await uploadImageToStorage(imageFile)
+
+      // Crear gimnasio con la URL de la imagen
       const { error } = await supabase.from('gyms').insert({
         name: formData.name.trim(),
         address: formData.address.trim(),
         phone: formData.phone.trim(),
-        location: formData.location.trim() || null,
-        image_url: formData.image_url.trim() || null,
+        description: formData.description.trim() || null,
+        image: imageUrl,
         is_active: formData.is_active,
       })
 
@@ -57,10 +103,14 @@ const AdminRegisterGym = () => {
           name: '',
           address: '',
           phone: '',
-          location: '',
-          image_url: '',
+          description: '',
           is_active: true,
         })
+        setImageFile(null)
+        setImagePreview('')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
       }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Error desconocido')
@@ -68,6 +118,12 @@ const AdminRegisterGym = () => {
     } finally {
       setCreating(false)
     }
+  }
+
+  const getFeedbackClass = () => {
+    if (feedbackType === 'success') return 'text-success'
+    if (feedbackType === 'error') return 'text-error'
+    return 'text-text-secondary'
   }
 
   return (
@@ -125,31 +181,36 @@ const AdminRegisterGym = () => {
             />
           </label>
 
-          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="image_url">
-            URL de imagen
-            <input
-              id="image_url"
-              name="image_url"
-              value={formData.image_url}
-              onChange={handleInputChange}
-              type="url"
-              placeholder="ej: https://ejemplo.com/imagen.jpg"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="location">
-            Descripción/Ubicación
+          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="description">
+            Descripción
             <textarea
-              id="location"
-              name="location"
-              value={formData.location}
+              id="description"
+              name="description"
+              value={formData.description}
               onChange={handleInputChange}
-              placeholder="ej: Ubicado en el centro comercial, 3 pisos"
+              placeholder="ej: Gimnasio de alta calidad con equipos modernos, clases personalizadas, piscina..."
               rows={3}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none"
             />
           </label>
+
+          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="image">
+            Imagen del gimnasio *
+            <input
+              ref={fileInputRef}
+              id="image"
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          {imagePreview && (
+            <div className="md:col-span-2 rounded-xl overflow-hidden border border-border">
+              <img src={imagePreview} alt="Vista previa" className="w-full h-40 object-cover" />
+            </div>
+          )}
 
           <label className="space-y-1 text-sm font-semibold text-text flex items-center gap-2 md:col-span-2">
             <input
@@ -175,17 +236,13 @@ const AdminRegisterGym = () => {
                 </>
               ) : (
                 <>
-                  <Building2 size={16} />
+                  <Upload size={16} />
                   Registrar gimnasio
                 </>
               )}
             </button>
             {feedback && (
-              <p
-                className={`text-sm ${
-                  feedbackType === 'success' ? 'text-success' : feedbackType === 'error' ? 'text-error' : 'text-text-secondary'
-                }`}
-              >
+              <p className={`text-sm ${getFeedbackClass()}`}>
                 {feedback}
               </p>
             )}

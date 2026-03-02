@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Loader2, Save, Trash2 } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
@@ -6,39 +6,92 @@ import { supabase } from '../lib/supabase'
 type ProductRow = {
   id?: string
   name?: string
-  sku?: string
+  description?: string
   price?: number | string
   stock?: number
-  active?: boolean
+  image_url?: string
+  category?: string
+  is_active?: boolean
   gym_id?: string
 }
 
 const GymAdminProducts = () => {
   const [gymId, setGymId] = useState<string | null>(null)
   const [products, setProducts] = useState<ProductRow[]>([])
-  const [form, setForm] = useState<ProductRow>({ name: '', sku: '', price: 0, stock: 0, active: true })
+  const [form, setForm] = useState<ProductRow>({ name: '', description: '', price: 0, stock: 0, image_url: '', category: '', is_active: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadGymId = async () => {
     const { data: auth } = await supabase.auth.getUser()
     const userId = auth.user?.id
     if (!userId) throw new Error('No hay sesión activa')
-    const { data: profile, error: profileError } = await supabase.from('profiles').select('gym_id, gym').eq('id', userId).single()
-    if (profileError) throw profileError
-    return (profile as { gym_id?: string; gym?: string })?.gym_id ?? (profile as { gym?: string })?.gym
+    
+    // Obtener gym_id de la tabla administrators
+    const { data: admin, error: adminError } = await supabase
+      .from('administrators')
+      .select('gym_id')
+      .eq('user_id', userId)
+      .single()
+    
+    if (adminError) {
+      console.error('Error cargando admin:', adminError)
+      throw new Error(`Error al cargar administrador: ${adminError.message}`)
+    }
+    if (!admin?.gym_id) throw new Error('El administrador no tiene gimnasio asignado')
+    
+    return admin.gym_id
   }
 
   const loadProducts = async (currentGymId: string) => {
     const { data, error: prodError } = await supabase
       .from('products')
-      .select('id, name, sku, price, stock, active')
+      .select('*')
       .eq('gym_id', currentGymId)
       .order('created_at', { ascending: false })
-    if (prodError) throw prodError
+    
+    if (prodError) {
+      console.error('Error cargando productos:', prodError)
+      throw new Error(`Error al cargar productos: ${prodError.message}`)
+    }
     setProducts(data ?? [])
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0]
+    if (file) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const uploadImageToStorage = async (file: File): Promise<string> => {
+    const fileExtension = file.name.split('.').pop()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExtension}`
+    
+    const { error: uploadError } = await supabase.storage
+      .from('products')
+      .upload(fileName, file)
+
+    if (uploadError) {
+      throw new Error(`Error al subir imagen: ${uploadError.message}`)
+    }
+
+    // Obtener URL pública
+    const { data } = supabase.storage
+      .from('products')
+      .getPublicUrl(fileName)
+
+    return data.publicUrl
   }
 
   useEffect(() => {
@@ -71,20 +124,44 @@ const GymAdminProducts = () => {
     setError('')
     setMessage('')
     try {
-      const payload = { ...form, gym_id: gymId }
-      if (!payload.name || !payload.sku) throw new Error('Nombre y SKU son obligatorios')
+      let imageUrl = form.image_url
+      
+      // Si hay una imagen nueva, subirla
+      if (imageFile) {
+        console.log('Subiendo imagen...')
+        imageUrl = await uploadImageToStorage(imageFile)
+        console.log('Imagen subida:', imageUrl)
+      }
+      
+      const payload = { ...form, gym_id: gymId, image_url: imageUrl }
+      console.log('Payload a guardar:', payload)
+      
+      if (!payload.name) throw new Error('El nombre es obligatorio')
+      
       if (payload.id) {
+        console.log('Actualizando producto...')
         const { error: updateError } = await supabase.from('products').update(payload).eq('id', payload.id)
-        if (updateError) throw updateError
+        if (updateError) {
+          console.error('Error al actualizar:', updateError)
+          throw updateError
+        }
         setMessage('Producto actualizado')
       } else {
+        console.log('Creando producto...')
         const { error: insertError } = await supabase.from('products').insert(payload)
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error('Error al insertar:', insertError)
+          throw insertError
+        }
         setMessage('Producto creado')
       }
       await loadProducts(gymId)
-      setForm({ name: '', sku: '', price: 0, stock: 0, active: true })
+      setForm({ name: '', description: '', price: 0, stock: 0, image_url: '', category: '', is_active: true })
+      setImageFile(null)
+      setImagePreview('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
+      console.error('Error completo:', err)
       setError(err instanceof Error ? err.message : 'No se pudo guardar el producto')
     } finally {
       setSaving(false)
@@ -93,6 +170,17 @@ const GymAdminProducts = () => {
 
   const handleEdit = (product: ProductRow) => {
     setForm(product)
+  }
+
+  const getButtonText = () => {
+    if (saving) return 'Guardando…'
+    if (form.id) return 'Actualizar'
+    return 'Crear producto'
+  }
+
+  const getPriceValue = (price: number | string | undefined) => {
+    if (price === undefined || price === null) return 0
+    return typeof price === 'number' ? price : Number(price)
   }
 
   const handleDelete = async (id?: string) => {
@@ -129,35 +217,65 @@ const GymAdminProducts = () => {
               value={form.name ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
-            <input
+            <textarea
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-              placeholder="SKU"
-              value={form.sku ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+              placeholder="Descripción"
+              value={form.description ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              rows={3}
             />
+            <div>
+              <label htmlFor="price-input" className="text-xs font-semibold text-text-secondary">Precio ($)</label>
+              <input
+                id="price-input"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="Ingresa el precio"
+                value={form.price === undefined || form.price === 0 ? '' : form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value ? Number(e.target.value) : 0 }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="stock-input" className="text-xs font-semibold text-text-secondary">Stock (Unidades)</label>
+              <input
+                id="stock-input"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                type="number"
+                min={0}
+                placeholder="Ingresa el stock"
+                value={form.stock === undefined || form.stock === 0 ? '' : form.stock}
+                onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value ? Number(e.target.value) : 0 }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="image-input" className="text-xs font-semibold text-text-secondary">Imagen del producto</label>
+              <input
+                id="image-input"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              />
+              {imagePreview && (
+                <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg mt-2" />
+              )}
+            </div>
             <input
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="Precio"
-              value={form.price ?? 0}
-              onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
-            />
-            <input
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-              type="number"
-              min={0}
-              placeholder="Stock"
-              value={form.stock ?? 0}
-              onChange={(e) => setForm((f) => ({ ...f, stock: Number(e.target.value) }))}
+              placeholder="Categoría"
+              value={form.category ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
             <label className="inline-flex items-center gap-2 text-sm text-text">
               <input
                 type="checkbox"
-                checked={form.active ?? true}
-                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+                checked={form.is_active ?? true}
+                onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
               />
+              {' '}
               Activo en la tienda
             </label>
             <button
@@ -165,47 +283,57 @@ const GymAdminProducts = () => {
               disabled={saving || loading}
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-background disabled:opacity-60"
             >
-              <Save size={16} /> {saving ? 'Guardando…' : form.id ? 'Actualizar' : 'Crear producto'}
+              <Save size={16} />
+              {' '}
+              {getButtonText()}
             </button>
             {message && <p className="text-sm text-success">{message}</p>}
             {error && <p className="text-sm text-warning">{error}</p>}
           </div>
 
           <div className="md:col-span-2 grid gap-3 md:grid-cols-2">
-            {loading ? (
-              <div className="flex items-center gap-2 text-sm text-text-secondary md:col-span-2"><Loader2 className="animate-spin" size={16} /> Cargando productos</div>
-            ) : products.length === 0 ? (
+            {loading && (
+              <div className="flex items-center gap-2 text-sm text-text-secondary md:col-span-2">
+                <Loader2 className="animate-spin" size={16} />
+                {' '}
+                Cargando productos
+              </div>
+            )}
+            {!loading && products.length === 0 && (
               <p className="text-sm text-text-secondary md:col-span-2">Sin productos cargados.</p>
-            ) : (
-              products.map((item) => {
-                const priceVal = item.price !== undefined && item.price !== null ? (typeof item.price === 'number' ? item.price : Number(item.price)) : 0
-                return (
-                  <div key={item.id ?? item.sku} className="rounded-2xl border border-border bg-background p-4 space-y-2">
-                    <p className="text-xs text-text-secondary">SKU {item.sku ?? 'N/D'}</p>
-                    <p className="text-base font-semibold text-text">{item.name ?? 'Sin nombre'}</p>
-                    <p className="text-sm text-text-secondary">Stock: {item.stock ?? 0}</p>
-                    <p className="text-sm text-text-secondary">Estado: {item.active ? 'Activo' : 'Oculto'}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold">${priceVal.toFixed(2)}</span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg border border-error text-error px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+            )}
+            {!loading && products.length > 0 && products.map((item) => {
+              const priceNum = getPriceValue(item.price)
+              return (
+                <div key={item.id ?? item.name} className="rounded-2xl border border-border bg-background p-4 space-y-2">
+                  {item.image_url && (
+                    <img src={item.image_url} alt={item.name} className="w-full h-32 object-cover rounded-lg" />
+                  )}
+                  <p className="text-xs text-text-secondary">{item.category ?? 'Sin categoría'}</p>
+                  <p className="text-base font-semibold text-text">{item.name ?? 'Sin nombre'}</p>
+                  <p className="text-sm text-text-secondary line-clamp-2">{item.description ?? 'Sin descripción'}</p>
+                  <p className="text-sm text-text-secondary">Stock: {item.stock ?? 0}</p>
+                  <p className="text-sm text-text-secondary">Estado: {item.is_active ? 'Activo' : 'Oculto'}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold">${priceNum.toFixed(2)}</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="rounded-lg border border-error text-error px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
-                )
-              })
-            )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </Card>
