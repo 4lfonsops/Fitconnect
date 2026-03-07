@@ -28,7 +28,7 @@ const Login = () => {
       return
     }
 
-    // Obtiene el rol desde administrators para enrutar al panel correcto
+    // Obtiene el rol desde las tablas de administradores
     const { data: userData } = await supabase.auth.getUser()
     const userId = userData.user?.id
 
@@ -37,30 +37,44 @@ const Login = () => {
       return
     }
 
+    // Verificar el rol del usuario en la tabla administrators
     const { data: admin, error: adminError } = await supabase
       .from('administrators')
-      .select('role')
+      .select('id, role')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    if (adminError || !admin) {
+    console.log('Checking admin for user:', userId)
+    console.log('admin result:', admin)
+    console.log('adminError:', adminError)
+
+    if (adminError) {
+      console.error('Error checking admin:', adminError)
+      setLoginError('Error al obtener información del usuario')
+      return
+    }
+
+    if (!admin) {
       setLoginError('Usuario no registrado como administrador')
       return
     }
 
-    const role = admin.role
-    if (role === 'superadmin') {
+    console.log('Admin role:', admin.role)
+
+    if (admin.role === 'superadmin') {
+      console.log('Usuario ES superadmin, redirigiendo a /superadmin')
       navigate('/superadmin')
       return
     }
 
-    if (role === 'gym_admin') {
+    if (admin.role === 'gym_admin') {
+      console.log('Usuario ES gym_admin, redirigiendo a /admin')
       navigate('/admin')
       return
     }
 
-    // Rol desconocido: fallback a login
-    navigate('/')
+    console.log('Usuario tiene rol desconocido:', admin.role)
+    setLoginError('Rol de usuario no reconocido')
   }
 
   return (

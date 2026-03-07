@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { Loader2, Save, Trash2 } from 'lucide-react'
+import { Loader2, Save, Trash2, Download } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { exportToCSV, type CSVRow } from '../utils/csvExport'
 
 type ProductRow = {
   id?: string
@@ -200,6 +201,23 @@ const GymAdminProducts = () => {
     }
   }
 
+  const handleExportCSV = () => {
+    console.log('Exporting products...', products.length)
+    const csvData: CSVRow[] = products.map((product) => ({
+      ID: product.id || '',
+      Nombre: product.name || '',
+      Descripción: product.description || '',
+      Categoría: product.category || '',
+      Precio: typeof product.price === 'number' ? product.price.toFixed(2) : product.price,
+      Stock: product.stock || 0,
+      Estado: product.is_active ? 'Activo' : 'Inactivo'
+    }))
+
+    const now = new Date()
+    const filename = `productos-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`
+    exportToCSV(csvData, filename)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -207,7 +225,15 @@ const GymAdminProducts = () => {
         <h1 className="text-2xl font-bold">Inventario de la tienda</h1>
         {gymId && <p className="text-xs text-text-secondary mt-1">Gym: {gymId}</p>}
       </div>
-      <Card subtitle="Controla precios, stock y visibilidad">
+      <Card subtitle="Controla precios, stock y visibilidad" action={
+        <button
+          onClick={handleExportCSV}
+          disabled={loading || products.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary/15 text-primary border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={14} /> Exportar
+        </button>
+      }>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="md:col-span-1 space-y-3">
             <p className="text-sm font-semibold text-text">Crear / editar</p>

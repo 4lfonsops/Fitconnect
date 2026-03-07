@@ -1,4 +1,4 @@
-import { Download, LogOut, Menu, Moon, Sun } from 'lucide-react'
+import { LogOut, Menu, Moon, Sun } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../store/theme'
 import { supabase } from '../lib/supabase'
@@ -26,10 +26,6 @@ const AdminTopbar = ({ onMenuClick }: AdminTopbarProps) => {
             onClick={onMenuClick}
           >
             <Menu size={18} />
-          </button>
-
-          <button className="h-10 px-3 inline-flex items-center gap-2 rounded-xl bg-primary text-background text-sm font-semibold">
-            <Download size={16} /> Exportar CSV
           </button>
         </div>
 

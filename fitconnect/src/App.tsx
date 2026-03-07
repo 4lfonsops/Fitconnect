@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminLayout from './layouts/AdminLayout'
 import GymAdminLayout from './layouts/GymAdminLayout'
+import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
 import Admin from './pages/Admin'
@@ -25,7 +26,14 @@ const App = () => {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
 
-      <Route path="/superadmin" element={<AdminLayout />}>
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute requiredRole="superadmin">
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Admin />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="gyms" element={<AdminGyms />} />
@@ -36,7 +44,14 @@ const App = () => {
         <Route path="register-gym" element={<AdminRegisterGym />} />
       </Route>
 
-      <Route path="/admin" element={<GymAdminLayout />}>
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requiredRole="gym_admin">
+            <GymAdminLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<GymAdminOverview />} />
         <Route path="users" element={<GymAdminUsers />} />
         <Route path="gym" element={<GymAdminGymPanel />} />

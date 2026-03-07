@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Download } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { exportToCSV, formatDateForCSV, type CSVRow } from '../utils/csvExport'
 
 type UserSubscription = {
   id: string
@@ -109,6 +110,21 @@ const GymAdminUsers = () => {
     }
   }, [])
 
+  const handleExportCSV = () => {
+    console.log('Exporting users...', users.length)
+    const csvData: CSVRow[] = users.map((user) => ({
+      ID: user.id || '',
+      Nombre: user.full_name || '',
+      Email: user.email || '',
+      Plan: user.plan_name || '',
+      'Activo desde': user.created_at ? formatDateForCSV(user.created_at) : ''
+    }))
+
+    const now = new Date()
+    const filename = `miembros-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`
+    exportToCSV(csvData, filename)
+  }
+
   const renderContent = () => {
     if (loading) {
       return <div className="flex items-center gap-2 text-sm text-text-secondary"><Loader2 size={16} className="animate-spin" /> Cargando usuarios</div>
@@ -156,7 +172,15 @@ const GymAdminUsers = () => {
         {gymId && <p className="text-xs text-text-secondary mt-1">Gym: {gymId}</p>}
       </div>
 
-      <Card subtitle="Miembros con acceso activo">
+      <Card subtitle="Miembros con acceso activo" action={
+        <button
+          onClick={handleExportCSV}
+          disabled={loading || users.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary/15 text-primary border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={14} /> Exportar
+        </button>
+      }>
         {renderContent()}
       </Card>
     </div>

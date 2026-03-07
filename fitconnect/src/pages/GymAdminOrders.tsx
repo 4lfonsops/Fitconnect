@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Download } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { exportToCSV, formatDateForCSV, type CSVRow } from '../utils/csvExport'
 
 type OrderRow = {
   id?: string
@@ -11,6 +12,8 @@ type OrderRow = {
   total_amount?: number | string
   status?: string
   created_at?: string
+  delivery_status?: string
+  delivery_date?: string
 }
 
 type MetricData = {
@@ -25,6 +28,7 @@ const GymAdminOrders = () => {
   const [metrics, setMetrics] = useState<MetricData>({ totalIncome: 0, completedOrders: 0, pendingOrders: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
 
   const loadGymId = async () => {
     const { data: auth } = await supabase.auth.getUser()
@@ -49,7 +53,7 @@ const GymAdminOrders = () => {
   const loadOrders = async (currentGymId: string) => {
     const { data, error: ordersError } = await supabase
       .from('orders')
-      .select('id, user_id, total_amount, status, created_at')
+      .select('id, user_id, total_amount, status, created_at, delivery_status, delivery_date')
       .eq('gym_id', currentGymId)
       .order('created_at', { ascending: false })
     
@@ -127,6 +131,51 @@ const GymAdminOrders = () => {
     return typeof val === 'number' ? val : Number(val)
   }
 
+  const handleExportCSV = () => {
+    console.log('Exporting orders...', orders.length)
+    alert('Exportando ' + orders.length + ' órdenes')
+    const csvData: CSVRow[] = orders.map((order) => ({
+      ID: order.id || '',
+      Cliente: order.user_name || 'Sin nombre',
+      Email: order.user_email || 'Sin email',
+      Monto: typeof order.total_amount === 'number' ? order.total_amount.toFixed(2) : order.total_amount,
+      'Estado de Pago': order.status === 'paid' ? 'Pagado' : order.status === 'pending' ? 'Pendiente' : order.status,
+      'Estado Entrega': order.delivery_status === 'delivered' ? 'Entregado' : 'Pendiente',
+      Fecha: order.created_at ? formatDateForCSV(order.created_at) : '',
+      'Fecha Entrega': order.delivery_date ? formatDateForCSV(order.delivery_date) : ''
+    }))
+
+    const now = new Date()
+    const filename = `ordenes-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`
+    exportToCSV(csvData, filename)
+  }
+
+  const handleMarkAsDelivered = async (orderId: string) => {
+    setUpdatingOrderId(orderId)
+    try {
+      const now = new Date().toISOString()
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ delivery_status: 'delivered', delivery_date: now })
+        .eq('id', orderId)
+      
+      if (updateError) throw updateError
+      
+      // Actualizar el estado local
+      setOrders(prevOrders =>
+        prevOrders.map(o =>
+          o.id === orderId
+            ? { ...o, delivery_status: 'delivered', delivery_date: now }
+            : o
+        )
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al marcar como entregado')
+    } finally {
+      setUpdatingOrderId(null)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -158,7 +207,15 @@ const GymAdminOrders = () => {
         </div>
       )}
 
-      <Card subtitle="Flujo de carrito → pago → entrega">
+      <Card subtitle="Flujo de carrito → pago → entrega" action={
+        <button
+          onClick={handleExportCSV}
+          disabled={loading || orders.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary/15 text-primary border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={14} /> Exportar
+        </button>
+      }>
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <Loader2 size={16} className="animate-spin" />
@@ -177,7 +234,9 @@ const GymAdminOrders = () => {
                   <th className="py-3 px-2">Email</th>
                   <th className="py-3 px-2">Monto</th>
                   <th className="py-3 px-2">Estado</th>
+                  <th className="py-3 px-2">Entrega</th>
                   <th className="py-3 px-2">Fecha</th>
+                  <th className="py-3 px-2">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -201,8 +260,34 @@ const GymAdminOrders = () => {
                           {o.status === 'paid' ? 'Pagado' : o.status === 'pending' ? 'Pendiente' : o.status}
                         </span>
                       </td>
+                      <td className="py-3 px-2">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                            o.delivery_status === 'delivered'
+                              ? 'bg-success/15 text-success border border-success/30'
+                              : 'bg-warning/15 text-warning border border-warning/30'
+                          }`}
+                        >
+                          {o.delivery_status === 'delivered' ? 'Entregado' : 'Pendiente'}
+                        </span>
+                      </td>
                       <td className="py-3 px-2 text-text-secondary">
-                        {o.created_at ? new Date(o.created_at).toLocaleString('es-ES') : '—'}
+                        {o.delivery_status === 'delivered' && o.delivery_date
+                          ? new Date(o.delivery_date).toLocaleString('es-ES')
+                          : o.created_at
+                            ? new Date(o.created_at).toLocaleString('es-ES')
+                            : '—'}
+                      </td>
+                      <td className="py-3 px-2">
+                        {o.delivery_status !== 'delivered' && (
+                          <button
+                            onClick={() => handleMarkAsDelivered(o.id!)}
+                            disabled={updatingOrderId === o.id}
+                            className="px-3 py-1 rounded-lg text-xs font-semibold bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-60 transition-colors"
+                          >
+                            {updatingOrderId === o.id ? 'Actualizando...' : 'Marcar entregada'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )

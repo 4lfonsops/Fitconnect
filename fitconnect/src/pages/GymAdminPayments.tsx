@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Download } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { exportToCSV, formatDateForCSV, type CSVRow } from '../utils/csvExport'
 
 type PaymentRow = {
   id?: string
@@ -135,6 +136,23 @@ const GymAdminPayments = () => {
     return isNaN(num) ? '$0.00' : `$${num.toFixed(2)}`
   }
 
+  const handleExportCSV = () => {
+    console.log('Exporting payments...', payments.length)
+    const csvData: CSVRow[] = payments.map((payment) => ({
+      ID: payment.id || '',
+      Cliente: payment.user_name || 'Sin nombre',
+      Email: payment.user_email || 'Sin email',
+      Monto: typeof payment.total_amount === 'number' ? payment.total_amount.toFixed(2) : payment.total_amount,
+      'Comisión Stripe': payment.stripe_fee ? payment.stripe_fee.toFixed(2) : '0.00',
+      'ID Stripe': payment.stripe_payment_intent_id || 'N/A',
+      Fecha: payment.created_at ? formatDateForCSV(payment.created_at) : ''
+    }))
+
+    const now = new Date()
+    const filename = `pagos-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`
+    exportToCSV(csvData, filename)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -172,7 +190,15 @@ const GymAdminPayments = () => {
         </div>
       )}
 
-      <Card subtitle="Transacciones Stripe procesadas">
+      <Card subtitle="Transacciones Stripe procesadas" action={
+        <button
+          onClick={handleExportCSV}
+          disabled={loading || payments.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary/15 text-primary border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={14} /> Exportar
+        </button>
+      }>
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <Loader2 size={16} className="animate-spin" />

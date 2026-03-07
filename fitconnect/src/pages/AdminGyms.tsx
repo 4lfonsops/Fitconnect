@@ -17,6 +17,21 @@ type GymRow = {
   created_at?: string
   city?: string
   state?: string
+  description?: string
+  address?: string
+  phone?: string
+  image?: string
+  opening_time?: string
+  closing_time?: string
+  is_active?: boolean
+  plans?: Array<{
+    id: string
+    name: string
+    price: number
+    duration_days: number
+    description: string
+    is_active: boolean
+  }>
 }
 
 const AdminGyms = () => {
@@ -33,11 +48,32 @@ const AdminGyms = () => {
       setError('')
       const { data, error: err } = await supabase.from('gyms').select('*').order('created_at', { ascending: false })
       if (!active) return
+      
       if (err) {
         setError(err.message)
         setGyms([])
       } else {
-        setGyms(data ?? [])
+        // Cargar planes para cada gym
+        const gymsWithPlans = await Promise.all(
+          (data ?? []).map(async (gym: GymRow) => {
+            const { data: plansData, error: plansError } = await supabase
+              .from('subscription_plans')
+              .select('*')
+              .eq('gym_id', gym.id)
+
+            if (plansError) {
+              console.error(`Error loading plans for gym ${gym.id}:`, plansError)
+            }
+
+            console.log(`Plans for gym ${gym.id}:`, plansData)
+
+            return {
+              ...gym,
+              plans: plansData ?? []
+            }
+          })
+        )
+        setGyms(gymsWithPlans)
       }
       setLoading(false)
     }
@@ -49,7 +85,29 @@ const AdminGyms = () => {
   }, [])
 
   const toggle = (id: string) => {
-    setOpen((prev) => ({ ...prev, [id]: !prev[id] }))
+    setOpen((prev) => {
+      const currentState = prev[id]
+      const newState = !currentState
+      
+      // Encontrar el índice del gym clickeado
+      const clickedIndex = gyms.findIndex(gym => gym.id === id)
+      
+      // Calcular cuál es su pareja en la misma línea (grid de 2 columnas)
+      const isLeftColumn = clickedIndex % 2 === 0
+      const pairIndex = isLeftColumn ? clickedIndex + 1 : clickedIndex - 1
+      
+      const updatedOpen: Record<string, boolean> = {}
+      
+      // Abrir/cerrar solo el clickeado y su pareja en la misma línea
+      if (gyms[clickedIndex]?.id) {
+        updatedOpen[gyms[clickedIndex].id] = newState
+      }
+      if (gyms[pairIndex]?.id) {
+        updatedOpen[gyms[pairIndex].id] = newState
+      }
+      
+      return { ...prev, ...updatedOpen }
+    })
   }
 
   return (
@@ -112,22 +170,91 @@ const AdminGyms = () => {
 
                   {expanded && (
                     <div className="rounded-xl border border-border bg-surface p-3 text-sm space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Admin</span>
-                        <span className="font-semibold text-text">{gym.admin_name ?? 'N/D'}</span>
+                      <p className="text-xs font-semibold text-text-secondary mb-2">Información del Gimnasio</p>
+                      
+                      {gym.image && (
+                        <div className="rounded-lg overflow-hidden mb-2">
+                          <img src={gym.image} alt={gym.name} className="w-full h-32 object-cover" />
+                        </div>
+                      )}
+                      
+                      {gym.description && (
+                        <div>
+                          <span className="text-text-secondary">Descripción</span>
+                          <p className="font-semibold text-text text-xs">{gym.description}</p>
+                        </div>
+                      )}
+                      
+                      {gym.address && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">Dirección</span>
+                          <span className="font-semibold text-text text-xs">{gym.address}</span>
+                        </div>
+                      )}
+                      
+                      {gym.phone && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">Teléfono</span>
+                          <span className="font-semibold text-text">{gym.phone}</span>
+                        </div>
+                      )}
+                      
+                      <div className="border-t border-border pt-2 mt-2">
+                        <p className="text-xs font-semibold text-text-secondary mb-2">Planes de Suscripción</p>
+                        
+                        {gym.plans && gym.plans.length > 0 ? (
+                          <div className="space-y-2">
+                            {gym.plans.map((plan) => (
+                              <div key={plan.id} className="rounded-lg bg-background p-2 space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-text">{plan.name}</span>
+                                  <span className={`text-xs px-2 py-1 rounded-full ${plan.is_active ? 'bg-success/15 text-success' : 'bg-text-secondary/10 text-text'}`}>
+                                    {plan.is_active ? 'Activo' : 'Inactivo'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-text-secondary">Precio:</span>
+                                  <span className="font-semibold text-text">${plan.price.toFixed(2)} / {plan.duration_days} días</span>
+                                </div>
+                                {plan.description && (
+                                  <p className="text-xs text-text-secondary">{plan.description}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-text-secondary">Sin planes registrados</p>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Plan SaaS</span>
-                        <span className="font-semibold text-text">{gym.plan_name ?? 'N/D'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Precio</span>
-                        <span className="font-semibold text-text">{price ? `${price} / mes` : 'N/D'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Renovaciones</span>
-                        <span className="font-semibold text-text">{gym.renewals ?? 'N/D'}</span>
-                      </div>
+                      
+                      {(gym.opening_time || gym.closing_time || gym.is_active !== undefined) && (
+                        <div className="border-t border-border pt-2 mt-2">
+                          <p className="text-xs font-semibold text-text-secondary mb-2">Horarios y Estado</p>
+                          
+                          {gym.opening_time && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-text-secondary">Apertura</span>
+                              <span className="font-semibold text-text">{gym.opening_time}</span>
+                            </div>
+                          )}
+                          
+                          {gym.closing_time && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-text-secondary">Cierre</span>
+                              <span className="font-semibold text-text">{gym.closing_time}</span>
+                            </div>
+                          )}
+                          
+                          {gym.is_active !== undefined && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-text-secondary">Activo</span>
+                              <span className={`font-semibold text-xs ${gym.is_active ? 'text-success' : 'text-warning'}`}>
+                                {gym.is_active ? 'Sí' : 'No'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

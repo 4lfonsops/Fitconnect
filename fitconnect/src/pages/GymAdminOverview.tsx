@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Activity, CreditCard, Loader2, Users } from 'lucide-react'
+import { Activity, CreditCard, Loader2, Users, Download } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { exportToCSV, type CSVRow } from '../utils/csvExport'
 
 type MonthlySeries = { labels: string[]; data: number[] }
 
@@ -183,6 +184,31 @@ const GymAdminOverview = () => {
     }
   }, [])
 
+  const handleExportSummaryCSV = () => {
+    console.log('Exporting gym summary')
+    const now = new Date()
+    const summaryData: CSVRow[] = [
+      {
+        Métrica: 'Miembros Activos',
+        Valor: memberCount,
+        Timestamp: now.toLocaleString('es-ES')
+      },
+      {
+        Métrica: 'Planes Activos',
+        Valor: activeSubs,
+        Timestamp: now.toLocaleString('es-ES')
+      },
+      {
+        Métrica: 'Ventas (Últimos 6 meses)',
+        Valor: `$${salesAmount.toFixed(2)}`,
+        Timestamp: now.toLocaleString('es-ES')
+      }
+    ]
+
+    const filename = `resumen-gym-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`
+    exportToCSV(summaryData, filename)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -232,7 +258,13 @@ const GymAdminOverview = () => {
             <button className="pill bg-primary/15 text-primary border-primary/30">Agregar miembro</button>
             <button className="pill bg-secondary/15 text-secondary border-secondary/30">Crear clase</button>
             <button className="pill bg-success/15 text-success border-success/30">Registrar pago</button>
-            <button className="pill bg-text-secondary/10 text-text border-border">Exportar CSV</button>
+            <button 
+              onClick={handleExportSummaryCSV}
+              disabled={loading}
+              className="pill bg-text-secondary/10 text-text border-border hover:bg-text-secondary/20 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={14} /> Exportar CSV
+            </button>
           </div>
         </Card>
         <Card title="Alertas" subtitle="Lo que necesita atención">
