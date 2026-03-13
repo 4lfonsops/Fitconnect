@@ -125,11 +125,32 @@ const GymAdminSubscriptions = () => {
         throw new Error('Nombre, precio y duración son obligatorios')
       }
 
+      const trimmedName = form.name.trim()
+      const trimmedDescription = form.description.trim()
+      const priceValue = parseFloat(form.price)
+      const durationValue = parseInt(form.duration_days)
+
+      if (trimmedName.length < 3 || trimmedName.length > 80) {
+        throw new Error('El nombre debe tener entre 3 y 80 caracteres')
+      }
+
+      if (!Number.isFinite(priceValue) || priceValue <= 0) {
+        throw new Error('El precio debe ser un número mayor a 0')
+      }
+
+      if (!Number.isInteger(durationValue) || durationValue <= 0 || durationValue > 3650) {
+        throw new Error('La duración debe ser un número entero entre 1 y 3650 días')
+      }
+
+      if (trimmedDescription.length > 300) {
+        throw new Error('La descripción no puede exceder 300 caracteres')
+      }
+
       const payload = {
-        name: form.name.trim(),
-        price: parseFloat(form.price),
-        duration_days: parseInt(form.duration_days),
-        description: form.description.trim(),
+        name: trimmedName,
+        price: priceValue,
+        duration_days: durationValue,
+        description: trimmedDescription,
         is_active: form.is_active
       }
 
@@ -231,6 +252,8 @@ const GymAdminSubscriptions = () => {
                 value={form.name}
                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Ej: Plan Básico, Plan Premium"
+                minLength={3}
+                maxLength={80}
               />
             </div>
 
@@ -239,6 +262,7 @@ const GymAdminSubscriptions = () => {
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                 value={form.price}
                 onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
@@ -250,6 +274,9 @@ const GymAdminSubscriptions = () => {
               <label className="text-xs font-semibold text-text-secondary">Duración (días) *</label>
               <input
                 type="number"
+                min="1"
+                max="3650"
+                step="1"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                 value={form.duration_days}
                 onChange={(e) => setForm(f => ({ ...f, duration_days: e.target.value }))}
@@ -265,6 +292,7 @@ const GymAdminSubscriptions = () => {
                 onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Descripción del plan (ej: Acceso a suplementos)"
                 rows={2}
+                maxLength={300}
               />
             </div>
 

@@ -170,12 +170,6 @@ const AdminGyms = () => {
                     <div className="rounded-xl border border-border bg-surface p-3 text-sm space-y-2">
                       <p className="text-xs font-semibold text-text-secondary mb-2">Información del Gimnasio</p>
                       
-                      {gym.image && (
-                        <div className="rounded-lg overflow-hidden mb-2">
-                          <img src={gym.image} alt={gym.name} className="w-full h-32 object-cover" />
-                        </div>
-                      )}
-                      
                       {gym.description && (
                         <div>
                           <span className="text-text-secondary">Descripción</span>

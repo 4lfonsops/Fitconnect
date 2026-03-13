@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { Building2, Loader2, Upload } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { isValidPhone10Digits, normalizePhoneDigits } from '../lib/validators'
 
 const AdminRegisterGym = () => {
   const [formData, setFormData] = useState({
@@ -21,6 +22,15 @@ const AdminRegisterGym = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.currentTarget
+
+    if (name === 'phone') {
+      setFormData({
+        ...formData,
+        phone: normalizePhoneDigits(value),
+      })
+      return
+    }
+
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? (e.currentTarget as HTMLInputElement).checked : value,
@@ -65,8 +75,41 @@ const AdminRegisterGym = () => {
     setCreating(true)
 
     // Validar campos requeridos
-    if (!formData.name.trim() || !formData.address.trim() || !formData.phone.trim()) {
+    const trimmedName = formData.name.trim()
+    const trimmedAddress = formData.address.trim()
+    const trimmedPhone = normalizePhoneDigits(formData.phone)
+    const trimmedDescription = formData.description.trim()
+
+    if (!trimmedName || !trimmedAddress || !trimmedPhone) {
       setFeedback('Por favor completa todos los campos requeridos')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (!isValidPhone10Digits(trimmedPhone)) {
+      setFeedback('El teléfono debe tener exactamente 10 dígitos')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (trimmedName.length < 3 || trimmedName.length > 80) {
+      setFeedback('El nombre debe tener entre 3 y 80 caracteres')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (trimmedAddress.length < 8 || trimmedAddress.length > 180) {
+      setFeedback('La dirección debe tener entre 8 y 180 caracteres')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (trimmedDescription.length > 400) {
+      setFeedback('La descripción no puede exceder 400 caracteres')
       setFeedbackType('error')
       setCreating(false)
       return
@@ -85,10 +128,10 @@ const AdminRegisterGym = () => {
 
       // Crear gimnasio con la URL de la imagen
       const { error } = await supabase.from('gyms').insert({
-        name: formData.name.trim(),
-        address: formData.address.trim(),
-        phone: formData.phone.trim(),
-        description: formData.description.trim() || null,
+        name: trimmedName,
+        address: trimmedAddress,
+        phone: trimmedPhone,
+        description: trimmedDescription || null,
         image: imageUrl,
         is_active: formData.is_active,
       })
@@ -149,6 +192,8 @@ const AdminRegisterGym = () => {
               value={formData.name}
               onChange={handleInputChange}
               required
+              minLength={3}
+              maxLength={80}
               placeholder="ej: Powerhouse Downtown"
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
@@ -162,6 +207,8 @@ const AdminRegisterGym = () => {
               value={formData.address}
               onChange={handleInputChange}
               required
+              minLength={8}
+              maxLength={180}
               placeholder="ej: Calle Principal 123"
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
@@ -176,7 +223,12 @@ const AdminRegisterGym = () => {
               onChange={handleInputChange}
               required
               type="tel"
-              placeholder="ej: +52 555 1234567"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              minLength={10}
+              maxLength={10}
+              title="Ingresa 10 dígitos numéricos"
+              placeholder="ej: 5512345678"
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
           </label>
@@ -190,6 +242,7 @@ const AdminRegisterGym = () => {
               onChange={handleInputChange}
               placeholder="ej: Gimnasio de alta calidad con equipos modernos, clases personalizadas, piscina..."
               rows={3}
+              maxLength={400}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none"
             />
           </label>
@@ -207,8 +260,8 @@ const AdminRegisterGym = () => {
           </label>
 
           {imagePreview && (
-            <div className="md:col-span-2 rounded-xl overflow-hidden border border-border">
-              <img src={imagePreview} alt="Vista previa" className="w-full h-40 object-cover" />
+            <div className="md:col-span-2 rounded-xl overflow-hidden border border-border bg-surface/40">
+              <img src={imagePreview} alt="Vista previa" className="w-full h-52 object-contain" />
             </div>
           )}
 

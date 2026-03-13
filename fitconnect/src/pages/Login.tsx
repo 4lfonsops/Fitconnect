@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { ArrowRight, Lock, Mail } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isValidEmail } from '../lib/validators'
 
 const Login = () => {
   const navigate = useNavigate()
@@ -14,11 +15,23 @@ const Login = () => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLoginError('')
+
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!isValidEmail(normalizedEmail)) {
+      setLoginError('Ingresa un correo electrónico válido')
+      return
+    }
+
+    if (!password.trim()) {
+      setLoginError('La contraseña es obligatoria')
+      return
+    }
+
     setLoginLoading(true)
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: normalizedEmail,
+      password: password.trim(),
     })
 
     setLoginLoading(false)
@@ -106,6 +119,7 @@ const Login = () => {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+                autoComplete="email"
                 placeholder="admin@fitconnect.com"
                 className="w-full bg-transparent text-white placeholder:text-white/40 outline-none"
               />
@@ -122,6 +136,7 @@ const Login = () => {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="w-full bg-transparent text-white placeholder:text-white/40 outline-none"
               />

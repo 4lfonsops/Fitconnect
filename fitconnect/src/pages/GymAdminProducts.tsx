@@ -134,10 +134,27 @@ const GymAdminProducts = () => {
         console.log('Imagen subida:', imageUrl)
       }
       
-      const payload = { ...form, gym_id: gymId, image_url: imageUrl }
+      const payload = {
+        ...form,
+        gym_id: gymId,
+        image_url: imageUrl,
+        name: form.name?.trim(),
+        description: form.description?.trim(),
+        category: form.category?.trim()
+      }
       console.log('Payload a guardar:', payload)
       
       if (!payload.name) throw new Error('El nombre es obligatorio')
+      if (payload.name.length < 3 || payload.name.length > 80) throw new Error('El nombre debe tener entre 3 y 80 caracteres')
+
+      const priceValue = typeof payload.price === 'number' ? payload.price : Number(payload.price)
+      if (!Number.isFinite(priceValue) || priceValue < 0) throw new Error('El precio debe ser un número mayor o igual a 0')
+
+      const stockValue = payload.stock ?? 0
+      if (!Number.isInteger(stockValue) || stockValue < 0) throw new Error('El stock debe ser un número entero mayor o igual a 0')
+
+      if (payload.description && payload.description.length > 300) throw new Error('La descripción no puede exceder 300 caracteres')
+      if (payload.category && payload.category.length > 60) throw new Error('La categoría no puede exceder 60 caracteres')
       
       if (payload.id) {
         console.log('Actualizando producto...')
@@ -242,6 +259,8 @@ const GymAdminProducts = () => {
               placeholder="Nombre"
               value={form.name ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              minLength={3}
+              maxLength={80}
             />
             <textarea
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
@@ -249,6 +268,7 @@ const GymAdminProducts = () => {
               value={form.description ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={3}
+              maxLength={300}
             />
             <div>
               <label htmlFor="price-input" className="text-xs font-semibold text-text-secondary">Precio ($)</label>
@@ -270,6 +290,7 @@ const GymAdminProducts = () => {
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                 type="number"
                 min={0}
+                step={1}
                 placeholder="Ingresa el stock"
                 value={form.stock === undefined || form.stock === 0 ? '' : form.stock}
                 onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value ? Number(e.target.value) : 0 }))}
@@ -286,7 +307,9 @@ const GymAdminProducts = () => {
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
               />
               {imagePreview && (
-                <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg mt-2" />
+                <div className="mt-2 overflow-hidden rounded-lg border border-border bg-surface/40">
+                  <img src={imagePreview} alt="Preview" className="h-44 w-full object-contain" />
+                </div>
               )}
             </div>
             <input
@@ -294,6 +317,7 @@ const GymAdminProducts = () => {
               placeholder="Categoría"
               value={form.category ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              maxLength={60}
             />
             <label className="inline-flex items-center gap-2 text-sm text-text">
               <input
@@ -333,7 +357,9 @@ const GymAdminProducts = () => {
               return (
                 <div key={item.id ?? item.name} className="rounded-2xl border border-border bg-background p-4 space-y-2">
                   {item.image_url && (
-                    <img src={item.image_url} alt={item.name} className="w-full h-32 object-cover rounded-lg" />
+                    <div className="overflow-hidden rounded-lg border border-border bg-surface/40">
+                      <img src={item.image_url} alt={item.name} className="h-40 w-full object-contain" loading="lazy" />
+                    </div>
                   )}
                   <p className="text-xs text-text-secondary">{item.category ?? 'Sin categoría'}</p>
                   <p className="text-base font-semibold text-text">{item.name ?? 'Sin nombre'}</p>

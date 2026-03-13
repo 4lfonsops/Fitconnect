@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
+import { isValidPhone10Digits, normalizePhoneDigits } from '../lib/validators'
 
 type GymRow = {
   id?: string
@@ -127,7 +128,7 @@ const GymAdminGymPanel = () => {
         name: form.name?.trim(),
         description: form.description?.trim() || null,
         address: form.address?.trim(),
-        phone: form.phone?.trim(),
+        phone: normalizePhoneDigits(form.phone ?? ''),
         image: imageUrl,
         opening_time: form.opening_time || null,
         closing_time: form.closing_time || null,
@@ -136,6 +137,22 @@ const GymAdminGymPanel = () => {
       
       if (!payload.name || !payload.address || !payload.phone) {
         throw new Error('Nombre, dirección y teléfono son obligatorios')
+      }
+
+      if (!isValidPhone10Digits(payload.phone)) {
+        throw new Error('El teléfono debe tener exactamente 10 dígitos')
+      }
+
+      if (payload.name.length < 3 || payload.name.length > 80) {
+        throw new Error('El nombre debe tener entre 3 y 80 caracteres')
+      }
+
+      if (payload.address.length < 8 || payload.address.length > 180) {
+        throw new Error('La dirección debe tener entre 8 y 180 caracteres')
+      }
+
+      if (payload.description && payload.description.length > 400) {
+        throw new Error('La descripción no puede exceder 400 caracteres')
       }
       
       const { error: updateError } = await supabase
@@ -206,6 +223,8 @@ const GymAdminGymPanel = () => {
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                   value={form.name || ''}
                   onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                  minLength={3}
+                  maxLength={80}
                   placeholder="Nombre del gimnasio"
                 />
               </div>
@@ -215,8 +234,13 @@ const GymAdminGymPanel = () => {
                   type="tel"
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                   value={form.phone || ''}
-                  onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="Teléfono de contacto"
+                  onChange={(e) => setForm(f => ({ ...f, phone: normalizePhoneDigits(e.target.value) }))}
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  minLength={10}
+                  maxLength={10}
+                  title="Ingresa 10 dígitos numéricos"
+                  placeholder="5512345678"
                 />
               </div>
               <div className="md:col-span-2">
@@ -226,6 +250,8 @@ const GymAdminGymPanel = () => {
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                   value={form.address || ''}
                   onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))}
+                  minLength={8}
+                  maxLength={180}
                   placeholder="Dirección completa"
                 />
               </div>
@@ -237,6 +263,7 @@ const GymAdminGymPanel = () => {
                   onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Descripción del gimnasio"
                   rows={3}
+                  maxLength={400}
                 />
               </div>
             </div>
@@ -276,7 +303,9 @@ const GymAdminGymPanel = () => {
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                 />
                 {imagePreview && (
-                  <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover rounded-lg" />
+                  <div className="overflow-hidden rounded-lg border border-border bg-surface/40">
+                    <img src={imagePreview} alt="Preview" className="h-52 w-full object-contain" />
+                  </div>
                 )}
               </div>
             </Card>

@@ -250,6 +250,7 @@ const GymAdminOrders = () => {
             <table className="min-w-full text-sm">
               <thead className="text-left text-text-secondary">
                 <tr className="border-b border-border">
+                  <th className="py-3 px-2">ID Pedido</th>
                   <th className="py-3 px-2">Cliente</th>
                   <th className="py-3 px-2">Email</th>
                   <th className="py-3 px-2">Monto</th>
@@ -264,6 +265,7 @@ const GymAdminOrders = () => {
                   const totalVal = getTotalValue(o.total_amount)
                   return (
                     <tr key={o.id}>
+                      <td className="py-3 px-2 font-mono text-xs text-text-secondary">{o.id || '—'}</td>
                       <td className="py-3 px-2 font-semibold text-text">{o.user_name || 'Sin nombre'}</td>
                       <td className="py-3 px-2 text-text-secondary">{o.user_email || 'Sin email'}</td>
                       <td className="py-3 px-2 font-semibold">${totalVal.toFixed(2)}</td>
