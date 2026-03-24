@@ -1,4 +1,4 @@
-import { BarChart3, CreditCard, KeyRound, Layers, Settings, Ticket, X } from 'lucide-react'
+import { BarChart3, CreditCard, KeyRound, Layers, Ticket, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const adminNav = [
@@ -6,7 +6,6 @@ const adminNav = [
   { label: 'Gimnasios', to: '/superadmin/gyms', icon: Layers },
   { label: 'Suscripciones', to: '/superadmin/subscriptions', icon: Ticket },
   { label: 'Pagos', to: '/superadmin/payments', icon: CreditCard },
-  { label: 'Ajustes', to: '/superadmin/settings', icon: Settings },
   { label: 'Registrar gym', to: '/superadmin/register-gym', icon: KeyRound },
 ]
 

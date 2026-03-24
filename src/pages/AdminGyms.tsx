@@ -39,6 +39,7 @@ const AdminGyms = () => {
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [deletingGymId, setDeletingGymId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -110,6 +111,45 @@ const AdminGyms = () => {
     })
   }
 
+  const handleDeleteGym = async (gym: GymRow) => {
+    if (!gym.id) return
+
+    const gymName = gym.name ?? 'este gimnasio'
+    const confirmed = globalThis.confirm?.(
+      `Vas a eliminar ${gymName}. Esta accion no se puede deshacer. ¿Deseas continuar?`
+    ) ?? false
+
+    if (!confirmed) return
+
+    setDeletingGymId(gym.id)
+    setError('')
+
+    // Atomic delete in DB: removes gym and dependent data in one transaction.
+    const { data: deleteResult, error: deleteError } = await supabase.rpc('delete_gym_with_dependencies', {
+      p_gym_id: gym.id,
+    })
+
+    if (deleteError) {
+      setError(`No se pudo eliminar el gimnasio: ${deleteError.message}`)
+      setDeletingGymId(null)
+      return
+    }
+
+    if (deleteResult !== true) {
+      setError('No se pudo confirmar la eliminacion en base de datos. Ejecuta la funcion RPC delete_gym_with_dependencies en Supabase.')
+      setDeletingGymId(null)
+      return
+    }
+
+    setGyms((prev) => prev.filter((item) => item.id !== gym.id))
+    setOpen((prev) => {
+      const next = { ...prev }
+      delete next[gym.id as string]
+      return next
+    })
+    setDeletingGymId(null)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -132,6 +172,7 @@ const AdminGyms = () => {
               const id = gym.id ?? gym.name ?? Math.random().toString()
               const expanded = open[id]
               const locations = gym.location_count ?? gym.locations ?? 0
+              const isDeleting = gym.id === deletingGymId
 
               return (
                 <div key={id} className="rounded-2xl border border-border bg-background p-4 space-y-3">
@@ -247,6 +288,18 @@ const AdminGyms = () => {
                           )}
                         </div>
                       )}
+
+                      <div className="border-t border-border pt-3 mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGym(gym)}
+                          disabled={isDeleting || !gym.id}
+                          className="inline-flex items-center gap-2 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-xs font-semibold text-error transition hover:bg-error/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isDeleting ? <Loader2 className="animate-spin" size={14} /> : null}
+                          {isDeleting ? 'Eliminando...' : 'Eliminar gimnasio'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
