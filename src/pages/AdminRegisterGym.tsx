@@ -40,6 +40,17 @@ const AdminRegisterGym = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0]
     if (file) {
+      // Validar que sea formato de imagen permitido
+      const validMimeTypes = ['image/jpeg', 'image/png']
+      const validExtensions = ['.jpg', '.jpeg', '.png']
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+      
+      if (!validMimeTypes.includes(file.type) || !validExtensions.includes(fileExtension)) {
+        setFeedback('Por favor sube solo archivos JPG o PNG')
+        setFeedbackType('error')
+        return
+      }
+      
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -248,12 +259,12 @@ const AdminRegisterGym = () => {
           </label>
 
           <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="image">
-            Imagen del gimnasio *
+            Imagen del gimnasio * (JPG o PNG)
             <input
               ref={fileInputRef}
               id="image"
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
               onChange={handleImageChange}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />

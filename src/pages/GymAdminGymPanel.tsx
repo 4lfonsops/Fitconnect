@@ -82,6 +82,16 @@ const GymAdminGymPanel = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0]
     if (file) {
+      // Validar que sea formato de imagen permitido
+      const validMimeTypes = ['image/jpeg', 'image/png']
+      const validExtensions = ['.jpg', '.jpeg', '.png']
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+      
+      if (!validMimeTypes.includes(file.type) || !validExtensions.includes(fileExtension)) {
+        setError('Por favor sube solo archivos JPG o PNG')
+        return
+      }
+      
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -293,12 +303,12 @@ const GymAdminGymPanel = () => {
               </div>
             </Card>
 
-            <Card subtitle="Imagen del gimnasio">
+            <Card subtitle="Imagen del gimnasio (JPG o PNG)">
               <div className="space-y-3">
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                   onChange={handleImageChange}
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                 />

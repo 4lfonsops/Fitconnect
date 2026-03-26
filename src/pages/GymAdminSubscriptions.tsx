@@ -134,8 +134,8 @@ const GymAdminSubscriptions = () => {
         throw new Error('El nombre debe tener entre 3 y 80 caracteres')
       }
 
-      if (!Number.isFinite(priceValue) || priceValue <= 0) {
-        throw new Error('El precio debe ser un número mayor a 0')
+      if (!Number.isFinite(priceValue) || priceValue < 1) {
+        throw new Error('El precio debe ser mayor a 1')
       }
 
       if (!Number.isInteger(durationValue) || durationValue <= 0 || durationValue > 3650) {
@@ -258,15 +258,15 @@ const GymAdminSubscriptions = () => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-text-secondary">Precio ($) *</label>
+              <label className="text-xs font-semibold text-text-secondary">Precio ($) * (Mínimo 1.00)</label>
               <input
                 type="number"
                 step="0.01"
-                min="0.01"
+                min="1"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mt-1"
                 value={form.price}
                 onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
-                placeholder="0.00"
+                placeholder="1.00"
               />
             </div>
 

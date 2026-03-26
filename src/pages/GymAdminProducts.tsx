@@ -66,6 +66,16 @@ const GymAdminProducts = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0]
     if (file) {
+      // Validar que sea formato de imagen permitido
+      const validMimeTypes = ['image/jpeg', 'image/png']
+      const validExtensions = ['.jpg', '.jpeg', '.png']
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+      
+      if (!validMimeTypes.includes(file.type) || !validExtensions.includes(fileExtension)) {
+        setError('Por favor sube solo archivos JPG o PNG')
+        return
+      }
+      
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -148,7 +158,7 @@ const GymAdminProducts = () => {
       if (payload.name.length < 3 || payload.name.length > 80) throw new Error('El nombre debe tener entre 3 y 80 caracteres')
 
       const priceValue = typeof payload.price === 'number' ? payload.price : Number(payload.price)
-      if (!Number.isFinite(priceValue) || priceValue < 0) throw new Error('El precio debe ser un número mayor o igual a 0')
+      if (!Number.isFinite(priceValue) || priceValue < 1) throw new Error('El precio debe ser mayor a 1')
 
       const stockValue = payload.stock ?? 0
       if (!Number.isInteger(stockValue) || stockValue < 0) throw new Error('El stock debe ser un número entero mayor o igual a 0')
@@ -271,14 +281,14 @@ const GymAdminProducts = () => {
               maxLength={300}
             />
             <div>
-              <label htmlFor="price-input" className="text-xs font-semibold text-text-secondary">Precio ($)</label>
+              <label htmlFor="price-input" className="text-xs font-semibold text-text-secondary">Precio ($) (Mínimo 1.00)</label>
               <input
                 id="price-input"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                 type="number"
-                min={0}
+                min={1}
                 step={0.01}
-                placeholder="Ingresa el precio"
+                placeholder="1.00"
                 value={form.price === undefined || form.price === 0 ? '' : form.price}
                 onChange={(e) => setForm((f) => ({ ...f, price: e.target.value ? Number(e.target.value) : 0 }))}
               />
@@ -297,12 +307,12 @@ const GymAdminProducts = () => {
               />
             </div>
             <div>
-              <label htmlFor="image-input" className="text-xs font-semibold text-text-secondary">Imagen del producto</label>
+              <label htmlFor="image-input" className="text-xs font-semibold text-text-secondary">Imagen del producto (JPG o PNG)</label>
               <input
                 id="image-input"
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                 onChange={handleImageChange}
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
               />
