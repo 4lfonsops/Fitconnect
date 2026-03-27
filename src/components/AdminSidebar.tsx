@@ -23,7 +23,7 @@ const AdminSidebar = ({ isOpen, onClose }: AdminSidebarProps) => {
       <button
         onClick={onClose}
         className="lg:hidden absolute right-4 top-4 h-10 w-10 flex items-center justify-center rounded-xl border border-border bg-background"
-        aria-label="Cerrar menú"
+        aria-label="Cerrar menú"//METIENDO COMENTARIOS
       >
         <X size={18} />
       </button>
