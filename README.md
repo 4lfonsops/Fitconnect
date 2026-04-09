@@ -1,73 +1,46 @@
-# React + TypeScript + Vite
+# FITCONNECT
+### Plataforma de Gestión Fitness y Centralización de Servicios
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+FitConnect es una solución tecnológica integral diseñada por GRTECH para digitalizar la interacción entre centros deportivos y usuarios. El sistema permite la gestión de perfiles de entrenamiento, planes nutricionales y la comercialización de suplementos en un entorno unificado.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## RESUMEN DEL PROYECTO
 
-## React Compiler
+El sistema se divide en dos interfaces estratégicas que interactúan en tiempo real para ofrecer una experiencia fluida tanto al administrador como al atleta:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Gestión Web (Panel Administrativo)
+* **Control de Membresías:** Administración centralizada de usuarios y roles.
+* **Gestión de Inventario:** Control de stock y procesamiento de órdenes para la tienda de suplementos.
+* **Red de Gimnasios:** Registro y geolocalización de sedes vinculadas.
+* **Generador de Afiliación:** Creación de identificadores únicos para la vinculación segura de nuevos socios.
 
-## Expanding the ESLint configuration
+### Experiencia Móvil (Usuario Final)
+* **Seguimiento de Rendimiento:** Consulta de rutinas de entrenamiento y progreso físico.
+* **Planificación Nutricional:** Visualización de guías alimenticias personalizadas.
+* **Marketplace:** Acceso al catálogo de productos y compra directa desde el dispositivo.
+* **Buscador de Centros:** Localización de gimnasios mediante servicios de mapas.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## INFRAESTRUCTURA TÉCNICA
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+El núcleo de FitConnect reside en una arquitectura moderna que prioriza la integridad de los datos y la velocidad de respuesta.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Componente | Tecnología |
+| :--- | :--- |
+| **Backend & Base de Datos** | Supabase (PostgreSQL) |
+| **Autenticación** | Supabase Auth |
+| **Almacenamiento** | Supabase Storage |
+| **Frontend Web** | [React / Next.js] |
+| **Desarrollo Móvil** | [React + Expo] |
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## SISTEMA DE VINCULACIÓN INTELIGENTE
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+La innovación principal de FitConnect es su protocolo de conexión entre el entorno físico y digital:
+
+1.  **Generación:** El administrador genera un código alfa-numérico único desde el panel web.
+2.  **Validación:** El usuario ingresa el código en la aplicación móvil.
+3.  **Sincronización:** Supabase procesa la transacción, vincula la cuenta del usuario al gimnasio correspondiente y desactiva el código para usos futuros, garantizando la exclusividad del acceso.
