@@ -13,6 +13,11 @@ const AdminRegisterGym = () => {
     description: '',
     is_active: true,
   })
+  const [adminData, setAdminData] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+  })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
   const [creating, setCreating] = useState(false)
@@ -27,6 +32,31 @@ const AdminRegisterGym = () => {
       setFormData({
         ...formData,
         phone: normalizePhoneDigits(value),
+      })
+      return
+    }
+
+    // Campos de admin
+    if (name === 'adminFullName') {
+      setAdminData({
+        ...adminData,
+        full_name: value,
+      })
+      return
+    }
+
+    if (name === 'adminEmail') {
+      setAdminData({
+        ...adminData,
+        email: value,
+      })
+      return
+    }
+
+    if (name === 'adminPassword') {
+      setAdminData({
+        ...adminData,
+        password: value,
       })
       return
     }
@@ -85,14 +115,26 @@ const AdminRegisterGym = () => {
     setFeedback('')
     setCreating(true)
 
-    // Validar campos requeridos
+    // Validar campos requeridos del gym
     const trimmedName = formData.name.trim()
     const trimmedAddress = formData.address.trim()
     const trimmedPhone = normalizePhoneDigits(formData.phone)
     const trimmedDescription = formData.description.trim()
 
+    // Validar campos requeridos del admin
+    const trimmedAdminFullName = adminData.full_name.trim()
+    const trimmedAdminEmail = adminData.email.trim()
+    const trimmedAdminPassword = adminData.password.trim()
+
     if (!trimmedName || !trimmedAddress || !trimmedPhone) {
-      setFeedback('Por favor completa todos los campos requeridos')
+      setFeedback('Por favor completa todos los campos requeridos del gimnasio')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (!trimmedAdminFullName || !trimmedAdminEmail || !trimmedAdminPassword) {
+      setFeedback('Por favor completa todos los campos del administrador del gimnasio')
       setFeedbackType('error')
       setCreating(false)
       return
@@ -126,6 +168,29 @@ const AdminRegisterGym = () => {
       return
     }
 
+    if (trimmedAdminFullName.length < 3 || trimmedAdminFullName.length > 80) {
+      setFeedback('El nombre del administrador debe tener entre 3 y 80 caracteres')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (trimmedAdminPassword.length < 6) {
+      setFeedback('La contraseña debe tener al menos 6 caracteres')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(trimmedAdminEmail)) {
+      setFeedback('Por favor ingresa un email válido')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
     if (!imageFile) {
       setFeedback('Por favor sube una imagen para el gimnasio')
       setFeedbackType('error')
@@ -138,33 +203,88 @@ const AdminRegisterGym = () => {
       const imageUrl = await uploadImageToStorage(imageFile)
 
       // Crear gimnasio con la URL de la imagen
-      const { error } = await supabase.from('gyms').insert({
+      const { data: gymData, error: gymError } = await supabase.from('gyms').insert({
         name: trimmedName,
         address: trimmedAddress,
         phone: trimmedPhone,
         description: trimmedDescription || null,
         image: imageUrl,
         is_active: formData.is_active,
+      }).select()
+
+      if (gymError) {
+        setFeedback(`Error al crear gimnasio: ${gymError.message}`)
+        setFeedbackType('error')
+        setCreating(false)
+        return
+      }
+
+      if (!gymData || gymData.length === 0) {
+        setFeedback('Error: No se pudo obtener el ID del gimnasio registrado')
+        setFeedbackType('error')
+        setCreating(false)
+        return
+      }
+
+      const gymId = gymData[0].id
+
+      // Crear usuario en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: trimmedAdminEmail,
+        password: trimmedAdminPassword,
+        email_confirm: true,
       })
 
-      if (error) {
-        setFeedback(`Error: ${error.message}`)
+      if (authError) {
+        setFeedback(`Error al crear usuario autenticado: ${authError.message}`)
         setFeedbackType('error')
-      } else {
-        setFeedback('✓ Gimnasio registrado exitosamente')
-        setFeedbackType('success')
-        setFormData({
-          name: '',
-          address: '',
-          phone: '',
-          description: '',
-          is_active: true,
-        })
-        setImageFile(null)
-        setImagePreview('')
-        if (fileInputRef.current) {
-          fileInputRef.current.value = ''
-        }
+        setCreating(false)
+        return
+      }
+
+      if (!authData.user?.id) {
+        setFeedback('Error: No se pudo obtener el ID del usuario autenticado')
+        setFeedbackType('error')
+        setCreating(false)
+        return
+      }
+
+      const userId = authData.user.id
+
+      // Crear usuario admin del gimnasio
+      const { error: userError } = await supabase.from('administrators').insert({
+        user_id: userId,
+        full_name: trimmedAdminFullName,
+        email: trimmedAdminEmail,
+        gym_id: gymId,
+        role: 'gym_admin',
+      })
+
+      if (userError) {
+        setFeedback(`Error al crear administrador: ${userError.message}`)
+        setFeedbackType('error')
+        setCreating(false)
+        return
+      }
+
+      setFeedback('✓ Gimnasio y administrador registrados exitosamente')
+      setFeedbackType('success')
+      setFormData({
+        name: '',
+        address: '',
+        phone: '',
+        description: '',
+        is_active: true,
+      })
+      setAdminData({
+        full_name: '',
+        email: '',
+        password: '',
+      })
+      setImageFile(null)
+      setImagePreview('')
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
       }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Error desconocido')
@@ -186,14 +306,14 @@ const AdminRegisterGym = () => {
         <div>
           <p className="text-sm text-text-secondary">Registro de gimnasios</p>
           <h1 className="text-2xl font-bold">Registrar nuevo gimnasio</h1>
-          <p className="text-sm text-text-secondary mt-1">Completa los datos del gimnasio para agregarlo a la plataforma.</p>
+          <p className="text-sm text-text-secondary mt-1">Completa los datos del gimnasio y del administrador para agregarlo a la plataforma.</p>
         </div>
         <span className="pill bg-primary/15 text-primary border-primary/30 inline-flex items-center gap-2">
           <Building2 size={16} /> Nuevo gimnasio
         </span>
       </div>
 
-      <Card title="Información del gimnasio" subtitle="Todos los campos marcados con * son obligatorios">
+      <Card title="Información del gimnasio y administrador" subtitle="Todos los campos marcados con * son obligatorios">
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="name">
             Nombre del gimnasio *
@@ -287,6 +407,60 @@ const AdminRegisterGym = () => {
             Gimnasio activo
           </label>
 
+          {/* Separador */}
+          <div className="md:col-span-2 h-px bg-border my-2" />
+
+          {/* Sección de Administrador del Gimnasio */}
+          <div className="md:col-span-2">
+            <h3 className="text-sm font-semibold text-text mb-3">Administrador del Gimnasio *</h3>
+            <p className="text-xs text-text-secondary mb-4">Estos datos se utilizarán para crear la cuenta del administrador del gimnasio</p>
+          </div>
+
+          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="adminFullName">
+            Nombre completo del administrador *
+            <input
+              id="adminFullName"
+              name="adminFullName"
+              value={adminData.full_name}
+              onChange={handleInputChange}
+              required
+              minLength={3}
+              maxLength={80}
+              placeholder="ej: Juan García"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="adminEmail">
+            Email del administrador *
+            <input
+              id="adminEmail"
+              name="adminEmail"
+              type="email"
+              value={adminData.email}
+              onChange={handleInputChange}
+              required
+              maxLength={100}
+              placeholder="ej: admin@gimnasio.com"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="adminPassword">
+            Contraseña del administrador *
+            <input
+              id="adminPassword"
+              name="adminPassword"
+              type="password"
+              value={adminData.password}
+              onChange={handleInputChange}
+              required
+              minLength={6}
+              placeholder="Mínimo 6 caracteres"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               type="submit"
@@ -301,7 +475,7 @@ const AdminRegisterGym = () => {
               ) : (
                 <>
                   <Upload size={16} />
-                  Registrar gimnasio
+                  Registrar gimnasio y administrador
                 </>
               )}
             </button>
