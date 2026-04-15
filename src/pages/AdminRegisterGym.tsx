@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { Building2, Loader2, Upload } from 'lucide-react'
 import Card from '../components/Card'
 import { supabase } from '../lib/supabase'
-import { isValidPhone10Digits, normalizePhoneDigits } from '../lib/validators'
+import { isValidEmail, isValidPhone10Digits, normalizePhoneDigits } from '../lib/validators'
 
 const AdminRegisterGym = () => {
   const [formData, setFormData] = useState({
@@ -11,12 +11,10 @@ const AdminRegisterGym = () => {
     address: '',
     phone: '',
     description: '',
+    owner_name: '',
+    owner_email: '',
+    owner_password: '',
     is_active: true,
-  })
-  const [adminData, setAdminData] = useState({
-    full_name: '',
-    email: '',
-    password: '',
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
@@ -36,31 +34,6 @@ const AdminRegisterGym = () => {
       return
     }
 
-    // Campos de admin
-    if (name === 'adminFullName') {
-      setAdminData({
-        ...adminData,
-        full_name: value,
-      })
-      return
-    }
-
-    if (name === 'adminEmail') {
-      setAdminData({
-        ...adminData,
-        email: value,
-      })
-      return
-    }
-
-    if (name === 'adminPassword') {
-      setAdminData({
-        ...adminData,
-        password: value,
-      })
-      return
-    }
-
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? (e.currentTarget as HTMLInputElement).checked : value,
@@ -70,17 +43,6 @@ const AdminRegisterGym = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0]
     if (file) {
-      // Validar que sea formato de imagen permitido
-      const validMimeTypes = ['image/jpeg', 'image/png']
-      const validExtensions = ['.jpg', '.jpeg', '.png']
-      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
-      
-      if (!validMimeTypes.includes(file.type) || !validExtensions.includes(fileExtension)) {
-        setFeedback('Por favor sube solo archivos JPG o PNG')
-        setFeedbackType('error')
-        return
-      }
-      
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -115,26 +77,24 @@ const AdminRegisterGym = () => {
     setFeedback('')
     setCreating(true)
 
-    // Validar campos requeridos del gym
+    // Validar campos requeridos
     const trimmedName = formData.name.trim()
     const trimmedAddress = formData.address.trim()
     const trimmedPhone = normalizePhoneDigits(formData.phone)
     const trimmedDescription = formData.description.trim()
-
-    // Validar campos requeridos del admin
-    const trimmedAdminFullName = adminData.full_name.trim()
-    const trimmedAdminEmail = adminData.email.trim()
-    const trimmedAdminPassword = adminData.password.trim()
+    const trimmedOwnerName = formData.owner_name.trim()
+    const trimmedOwnerEmail = formData.owner_email.trim().toLowerCase()
+    const trimmedOwnerPassword = formData.owner_password
 
     if (!trimmedName || !trimmedAddress || !trimmedPhone) {
-      setFeedback('Por favor completa todos los campos requeridos del gimnasio')
+      setFeedback('Por favor completa todos los campos requeridos')
       setFeedbackType('error')
       setCreating(false)
       return
     }
 
-    if (!trimmedAdminFullName || !trimmedAdminEmail || !trimmedAdminPassword) {
-      setFeedback('Por favor completa todos los campos del administrador del gimnasio')
+    if (!trimmedOwnerName || !trimmedOwnerEmail || !trimmedOwnerPassword) {
+      setFeedback('Por favor completa los datos del dueño del gimnasio')
       setFeedbackType('error')
       setCreating(false)
       return
@@ -142,6 +102,20 @@ const AdminRegisterGym = () => {
 
     if (!isValidPhone10Digits(trimmedPhone)) {
       setFeedback('El teléfono debe tener exactamente 10 dígitos')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (!isValidEmail(trimmedOwnerEmail)) {
+      setFeedback('El correo del dueño no es válido')
+      setFeedbackType('error')
+      setCreating(false)
+      return
+    }
+
+    if (trimmedOwnerPassword.length < 8) {
+      setFeedback('La contraseña del dueño debe tener al menos 8 caracteres')
       setFeedbackType('error')
       setCreating(false)
       return
@@ -168,29 +142,6 @@ const AdminRegisterGym = () => {
       return
     }
 
-    if (trimmedAdminFullName.length < 3 || trimmedAdminFullName.length > 80) {
-      setFeedback('El nombre del administrador debe tener entre 3 y 80 caracteres')
-      setFeedbackType('error')
-      setCreating(false)
-      return
-    }
-
-    if (trimmedAdminPassword.length < 6) {
-      setFeedback('La contraseña debe tener al menos 6 caracteres')
-      setFeedbackType('error')
-      setCreating(false)
-      return
-    }
-
-    // Validar email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(trimmedAdminEmail)) {
-      setFeedback('Por favor ingresa un email válido')
-      setFeedbackType('error')
-      setCreating(false)
-      return
-    }
-
     if (!imageFile) {
       setFeedback('Por favor sube una imagen para el gimnasio')
       setFeedbackType('error')
@@ -203,83 +154,78 @@ const AdminRegisterGym = () => {
       const imageUrl = await uploadImageToStorage(imageFile)
 
       // Crear gimnasio con la URL de la imagen
-      const { data: gymData, error: gymError } = await supabase.from('gyms').insert({
-        name: trimmedName,
-        address: trimmedAddress,
-        phone: trimmedPhone,
-        description: trimmedDescription || null,
-        image: imageUrl,
-        is_active: formData.is_active,
-      }).select()
+      const { data: gymData, error: gymError } = await supabase
+        .from('gyms')
+        .insert({
+          name: trimmedName,
+          address: trimmedAddress,
+          phone: trimmedPhone,
+          description: trimmedDescription || null,
+          image: imageUrl,
+          is_active: formData.is_active,
+        })
+        .select('id')
+        .single()
 
       if (gymError) {
-        setFeedback(`Error al crear gimnasio: ${gymError.message}`)
-        setFeedbackType('error')
-        setCreating(false)
-        return
+        throw new Error(`Error al crear gimnasio: ${gymError.message}`)
       }
 
-      if (!gymData || gymData.length === 0) {
-        setFeedback('Error: No se pudo obtener el ID del gimnasio registrado')
-        setFeedbackType('error')
-        setCreating(false)
-        return
-      }
+      const createdGymId = gymData.id
 
-      const gymId = gymData[0].id
-
-      // Crear usuario en Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: trimmedAdminEmail,
-        password: trimmedAdminPassword,
-        email_confirm: true,
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: trimmedOwnerEmail,
+        password: trimmedOwnerPassword,
+        options: {
+          data: {
+            full_name: trimmedOwnerName,
+            role: 'gym_admin',
+            gym_name: trimmedName,
+          },
+        },
       })
 
       if (authError) {
-        setFeedback(`Error al crear usuario autenticado: ${authError.message}`)
-        setFeedbackType('error')
-        setCreating(false)
-        return
+        await supabase.from('gyms').delete().eq('id', createdGymId)
+
+        const authMessage = authError.message?.toLowerCase() || ''
+        if (authMessage.includes('rate limit')) {
+          throw new Error('Supabase bloqueó temporalmente el alta por límite de correos (rate limit). No se creó ni el usuario ni el administrador. Espera unos minutos e intenta de nuevo.')
+        }
+
+        throw new Error(`Error al crear usuario del dueño: ${authError.message}`)
       }
 
-      if (!authData.user?.id) {
-        setFeedback('Error: No se pudo obtener el ID del usuario autenticado')
-        setFeedbackType('error')
-        setCreating(false)
-        return
+      const ownerUserId = authData.user?.id
+      if (!ownerUserId) {
+        await supabase.from('gyms').delete().eq('id', createdGymId)
+        throw new Error('No se pudo obtener el ID del usuario creado')
       }
 
-      const userId = authData.user.id
-
-      // Crear usuario admin del gimnasio
-      const { error: userError } = await supabase.from('administrators').insert({
-        user_id: userId,
-        full_name: trimmedAdminFullName,
-        email: trimmedAdminEmail,
-        gym_id: gymId,
+      const { error: adminError } = await supabase.from('administrators').insert({
+        user_id: ownerUserId,
+        full_name: trimmedOwnerName,
+        email: trimmedOwnerEmail,
+        gym_id: createdGymId,
         role: 'gym_admin',
       })
 
-      if (userError) {
-        setFeedback(`Error al crear administrador: ${userError.message}`)
-        setFeedbackType('error')
-        setCreating(false)
-        return
+      if (adminError) {
+        await supabase.from('gyms').delete().eq('id', createdGymId)
+        throw new Error(`Error al crear administrador: ${adminError.message}`)
       }
 
-      setFeedback('✓ Gimnasio y administrador registrados exitosamente')
+      setFeedback('✓ Gimnasio y dueño registrados exitosamente')
       setFeedbackType('success')
       setFormData({
         name: '',
         address: '',
         phone: '',
         description: '',
+        owner_name: '',
+        owner_email: '',
+        owner_password: '',
         is_active: true,
-      })
-      setAdminData({
-        full_name: '',
-        email: '',
-        password: '',
       })
       setImageFile(null)
       setImagePreview('')
@@ -306,14 +252,14 @@ const AdminRegisterGym = () => {
         <div>
           <p className="text-sm text-text-secondary">Registro de gimnasios</p>
           <h1 className="text-2xl font-bold">Registrar nuevo gimnasio</h1>
-          <p className="text-sm text-text-secondary mt-1">Completa los datos del gimnasio y del administrador para agregarlo a la plataforma.</p>
+          <p className="text-sm text-text-secondary mt-1">Completa los datos del gimnasio para agregarlo a la plataforma.</p>
         </div>
         <span className="pill bg-primary/15 text-primary border-primary/30 inline-flex items-center gap-2">
           <Building2 size={16} /> Nuevo gimnasio
         </span>
       </div>
 
-      <Card title="Información del gimnasio y administrador" subtitle="Todos los campos marcados con * son obligatorios">
+      <Card title="Información del gimnasio" subtitle="Todos los campos marcados con * son obligatorios">
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="name">
             Nombre del gimnasio *
@@ -364,6 +310,52 @@ const AdminRegisterGym = () => {
             />
           </label>
 
+          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="owner_name">
+            Nombre del dueño *
+            <input
+              id="owner_name"
+              name="owner_name"
+              value={formData.owner_name}
+              onChange={handleInputChange}
+              required
+              minLength={3}
+              maxLength={80}
+              placeholder="ej: Juan Pérez"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="owner_email">
+            Correo del dueño *
+            <input
+              id="owner_email"
+              name="owner_email"
+              type="email"
+              value={formData.owner_email}
+              onChange={handleInputChange}
+              required
+              autoComplete="email"
+              placeholder="ej: dueno@gimnasio.com"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="owner_password">
+            Contraseña del dueño *
+            <input
+              id="owner_password"
+              name="owner_password"
+              type="password"
+              value={formData.owner_password}
+              onChange={handleInputChange}
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
           <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="description">
             Descripción
             <textarea
@@ -379,12 +371,12 @@ const AdminRegisterGym = () => {
           </label>
 
           <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="image">
-            Imagen del gimnasio * (JPG o PNG)
+            Imagen del gimnasio *
             <input
               ref={fileInputRef}
               id="image"
               type="file"
-              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+              accept="image/*"
               onChange={handleImageChange}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
@@ -407,60 +399,6 @@ const AdminRegisterGym = () => {
             Gimnasio activo
           </label>
 
-          {/* Separador */}
-          <div className="md:col-span-2 h-px bg-border my-2" />
-
-          {/* Sección de Administrador del Gimnasio */}
-          <div className="md:col-span-2">
-            <h3 className="text-sm font-semibold text-text mb-3">Administrador del Gimnasio *</h3>
-            <p className="text-xs text-text-secondary mb-4">Estos datos se utilizarán para crear la cuenta del administrador del gimnasio</p>
-          </div>
-
-          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="adminFullName">
-            Nombre completo del administrador *
-            <input
-              id="adminFullName"
-              name="adminFullName"
-              value={adminData.full_name}
-              onChange={handleInputChange}
-              required
-              minLength={3}
-              maxLength={80}
-              placeholder="ej: Juan García"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-text" htmlFor="adminEmail">
-            Email del administrador *
-            <input
-              id="adminEmail"
-              name="adminEmail"
-              type="email"
-              value={adminData.email}
-              onChange={handleInputChange}
-              required
-              maxLength={100}
-              placeholder="ej: admin@gimnasio.com"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-text md:col-span-2" htmlFor="adminPassword">
-            Contraseña del administrador *
-            <input
-              id="adminPassword"
-              name="adminPassword"
-              type="password"
-              value={adminData.password}
-              onChange={handleInputChange}
-              required
-              minLength={6}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-          </label>
-
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               type="submit"
@@ -475,7 +413,7 @@ const AdminRegisterGym = () => {
               ) : (
                 <>
                   <Upload size={16} />
-                  Registrar gimnasio y administrador
+                  Registrar gimnasio
                 </>
               )}
             </button>
